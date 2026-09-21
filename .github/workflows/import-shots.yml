@@ -1,0 +1,30 @@
+name: Import Direction B shots
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/import-shots.yml
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download screenshots
+        run: |
+          curl -fsSL -o b-login.png https://litter.catbox.moe/geioi9.png
+          curl -fsSL -o b-create.png https://litter.catbox.moe/fu7zzc.png
+          curl -fsSL -o b-board.png https://litter.catbox.moe/w1r3b6.png
+          curl -fsSL -o b-create-filled.png https://litter.catbox.moe/i0a05f.png
+          file b-login.png b-create.png b-board.png b-create-filled.png
+      - name: Commit screenshots
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add b-login.png b-create.png b-board.png b-create-filled.png
+          git diff --cached --quiet || git commit -m "Add Direction B full-viewport critique screenshots"
+          git push
