@@ -14,8 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
       - name: Download screenshots
         run: |
           set -eux
@@ -24,26 +22,24 @@ jobs:
           curl -fsSL -o b-board.png https://litter.catbox.moe/w1r3b6.png
           curl -fsSL -o b-create-filled.png https://litter.catbox.moe/i0a05f.png
           file b-login.png b-create.png b-board.png b-create-filled.png
-      - name: Commit via Contents API
+      - name: Commit via Contents API JSON body
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
-          put() {
-            local path="$1"
-            local content
-            content="$(base64 -w0 "$path")"
-            local sha
-            sha="$(gh api "repos/${{ github.repository }}/contents/${path}" --jq .sha || true)"
-            if [ -n "${sha}" ] && [ "${sha}" != "null" ]; then
-              gh api --method PUT "repos/${{ github.repository }}/contents/${path}" \
-                -f message="Add ${path}" -f content="${content}" -f sha="${sha}"
-            else
-              gh api --method PUT "repos/${{ github.repository }}/contents/${path}" \
-                -f message="Add ${path}" -f content="${content}"
-            fi
-          }
-          put b-login.png
-          put b-create.png
-          put b-board.png
-          put b-create-filled.png
+          python3 <<'PY'
+          import base64, json, pathlib, subprocess, os
+          repo = os.environ["GITHUB_REPOSITORY"]
+          for path in ["b-login.png", "b-create.png", "b-board.png", "b-create-filled.png"]:
+              content = base64.b64encode(pathlib.Path(path).read_bytes()).decode()
+              sha = None
+              probe = subprocess.run(["gh", "api", f"repos/{repo}/contents/{path}", "--jq", ".sha"], capture_output=True, text=True)
+              if probe.returncode == 0:
+                  sha = probe.stdout.strip() or None
+              payload = {"message": f"Add {path}", "content": content}
+              if sha:
+                  payload["sha"] = sha
+              pathlib.Path("payload.json").write_text(json.dumps(payload))
+              subprocess.check_call(["gh", "api", "--method", "PUT", f"repos/{repo}/contents/{path}", "--input", "payload.json"])
+              print("uploaded", path, "bytes", pathlib.Path(path).stat().st_size)
+          PY
